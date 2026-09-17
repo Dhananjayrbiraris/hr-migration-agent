@@ -1,0 +1,10 @@
+Employee Number,Name,Contact,Department,Position,Hire Date,Active?,Manager,City
+E1002,Priya Nair,priya.nair@acme.com,Engineering,Senior Software Engineer,07/01/2020,Yes,raj.k@acme.com,Remote
+E1003,Mike O'Brien,mike.obrien@acme.com,Marketing,Marketing Manager,01/14/2018,Yes,mary.smith@acme.com,Chicago
+E1009,Grace Han,grace.han@acme.com,Finance,Accountant,2021-03-09,Yes,leo.chen@acme.com,Boston
+E1010,Omar Al Farsi,omar.alfarsi@acme.com,Sales,Sales Rep,2020-02-17,Yes,mary.smith@acme.com,New York
+E1011,Wei Zhang Li,wei.zhang@acme.com,Engineering,Engineer,2019-09-23,Yes,raj.k@acme.com,Remote
+E1012,Lucas Meyer,lucas.meyer@@acme.com,Engineering,Engineer,2022-01-10,Yes,raj.k@acme.com,Remote
+E1013,,jamie.fox@acme.com,Marketing,Content Strategist,2021-06-15,Yes,mary.smith@acme.com,Chicago
+E1005,Tom Baxter,tom.b@acme.com,Sales,Sales Rep,03/02/2022,Yes,mary.smith@acme.com,New York
+E1014,Nina Volkov,nina.volkov@acme.com,Support,Support Lead,not available,Yes,leo.chen@acme.com,Remote

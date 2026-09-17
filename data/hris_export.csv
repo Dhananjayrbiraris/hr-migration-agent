@@ -1,0 +1,11 @@
+EmpID,First,Last,Email Address,Dept,Title,DOH,Status,Mgr Email,Office
+E1001,John,Doe,john.doe@acme.com,Sales,Sales Rep,03/14/2019,Active,mary.smith@acme.com,New York
+E1002, Priya ,Nair,priya.nair@acme.com,Engineering,Software Engineer,2020-07-01,Active,raj.k@acme.com,Remote
+E1003,Mike,OBrien,MIKE.OBRIEN@ACME.COM,Marketing,Marketing Manager,14-01-2018,Active,mary.smith@acme.com,Chicago
+E1004,Sara,Lee,sara.lee@acme.com,Engineering,Engineer,2021/11/20,Active,raj.k@acme.com,Remote
+E1005,Tom,,tom.b@acme.com,Sales,,03/02/2022,Active,mary.smith@acme.com,New York
+E1006,Anita,Kumar,anita.kumar@acme.com,Finance,Financial Analyst,N/A,Active,leo.chen@acme.com,Boston
+E1007,David,Chen,david.chen@acme,Engineering,Engineer,2019-05-05,Inactive,raj.k@acme.com,Remote
+E1002,Priya,Nair,priya.nair@acme.com,Engineering,Software Engineer II,2020-07-01,Active,raj.k@acme.com,Remote
+E1008,Elena,Petrova,elena.petrova@acme.com,Sales,Sales Rep,2022-08-19,Active,mary.smith@acme.com,New York
+E1008,Elena,Petrova,elena.petrova@acme.com,Sales,Sales Rep,2022-08-19,Active,mary.smith@acme.com,New York

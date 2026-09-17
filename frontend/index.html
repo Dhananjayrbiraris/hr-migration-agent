@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Migration Agent Console</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1d212b; --border: #2a2f3a;
+    --text: #e6e9ef; --muted: #8a92a3; --accent: #5b8cff; --good: #33c17b;
+    --warn: #e0a63a; --bad: #e05555; --esc: #c77bff;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size: 16px; margin:0; font-weight:600; }
+  header .sub { color: var(--muted); font-size:12px; margin-top:2px; }
+  .btn { background: var(--accent); color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; }
+  .btn.secondary { background: var(--panel2); border:1px solid var(--border); color: var(--text); }
+  .btn.small { padding:5px 10px; font-size:12px; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .btn.good { background: var(--good); }
+  .btn.warn { background: var(--warn); }
+  .btn.bad { background: var(--bad); }
+  main { display:grid; grid-template-columns: 1.1fr 1.3fr; gap:14px; padding:16px; }
+  .col { display:flex; flex-direction:column; gap:14px; }
+  .panel { background: var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 10px 0; display:flex; justify-content:space-between; align-items:center; }
+  .badge { background: var(--panel2); border:1px solid var(--border); border-radius:20px; padding:2px 9px; font-size:11px; color:var(--muted); }
+  .badge.esc { color: var(--esc); border-color: var(--esc); }
+  #log { height: 360px; overflow-y:auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+  .logline { padding:3px 0; border-bottom: 1px dashed rgba(255,255,255,0.04); }
+  .lvl-info { color: var(--muted); }
+  .lvl-action { color: #9fc0ff; }
+  .lvl-success { color: var(--good); }
+  .lvl-warn { color: var(--warn); }
+  .lvl-escalate { color: var(--esc); font-weight:600; }
+  .esc-card { background: var(--panel2); border:1px solid var(--border); border-left: 3px solid var(--esc); border-radius:8px; padding:10px 12px; margin-bottom:10px; }
+  .esc-card .kind { font-size:10px; text-transform:uppercase; color: var(--esc); letter-spacing:.05em; }
+  .esc-card .title { font-weight:600; font-size:13px; margin:3px 0 5px; }
+  .esc-card .detail { font-size:12px; color: var(--muted); margin-bottom:8px; line-height:1.4; }
+  .esc-card .ctx { font-size:11px; color:#b7bfce; background:#12151b; border-radius:6px; padding:6px 8px; margin-bottom:8px; white-space:pre-wrap; }
+  .esc-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .esc-actions input { background:#12151b; border:1px solid var(--border); color:var(--text); border-radius:5px; padding:5px 7px; font-size:12px; flex:1; min-width:120px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  th { color: var(--muted); font-weight:500; position: sticky; top:0; background: var(--panel); }
+  .tablewrap { max-height: 260px; overflow:auto; }
+  .empty { color: var(--muted); font-size:12px; padding: 10px 2px; }
+  .stat-row { display:flex; gap:10px; margin-bottom:10px; flex-wrap: wrap; }
+  .stat { background: var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; min-width:90px; }
+  .stat .n { font-size:18px; font-weight:700; }
+  .stat .l { font-size:10px; color:var(--muted); text-transform:uppercase; }
+  .toolbar { display:flex; gap:8px; margin-bottom: 10px; flex-wrap:wrap; }
+  .resolved-tag { font-size:10px; padding:1px 7px; border-radius: 10px; }
+  .tag-approved { background: rgba(51,193,123,.15); color: var(--good); }
+  .tag-corrected { background: rgba(91,140,255,.15); color: var(--accent); }
+  .tag-rejected { background: rgba(224,85,85,.15); color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🧭 Client Data Migration &amp; Integration Agent</h1>
+    <div class="sub">HR/CRM → target platform · human-in-the-loop console</div>
+  </div>
+  <div class="toolbar">
+    <button class="btn secondary" onclick="doReset()">Reset</button>
+    <button class="btn" onclick="doRun()">▶ Run agent on sample data</button>
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <div class="panel">
+      <h2>Live agent trace <span class="badge" id="stageBadge">idle</span></h2>
+      <div id="log"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Escalation queue <span class="badge esc" id="escCount">0 pending</span></h2>
+      <div id="escList"><div class="empty">No escalations yet. Run the agent to begin.</div></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="panel">
+      <h2>Migration summary</h2>
+      <div class="stat-row" id="stats"></div>
+      <div class="toolbar">
+        <button class="btn good" onclick="doPush()">⤴ Push ready records to target</button>
+        <button class="btn warn" onclick="doRetry()">⟲ Retry failed</button>
+        <button class="btn bad secondary" onclick="doRollback()">⎌ Rollback last batch</button>
+      </div>
+      <div class="tablewrap" id="pushResults"><div class="empty">No push yet.</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Dataset preview</h2>
+      <div class="tablewrap" id="dataset"><div class="empty">No data yet.</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Audit trail</h2>
+      <div class="tablewrap" id="audit"><div class="empty">No activity yet.</div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = "";
+let logCursor = 0;
+let poller = null;
+
+async function api(path, opts) {
+  const res = await fetch(API + path, opts);
+  return res.json();
+}
+
+async function doReset() {
+  await api("/api/reset", {method:"POST"});
+  logCursor = 0;
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("escList").innerHTML = '<div class="empty">No escalations yet.</div>';
+  document.getElementById("dataset").innerHTML = '<div class="empty">No data yet.</div>';
+  document.getElementById("audit").innerHTML = '<div class="empty">No activity yet.</div>';
+  document.getElementById("pushResults").innerHTML = '<div class="empty">No push yet.</div>';
+  document.getElementById("stats").innerHTML = "";
+  document.getElementById("stageBadge").textContent = "idle";
+}
+
+async function doRun() {
+  await api("/api/run?use_sample=true", {method:"POST"});
+  startPolling();
+}
+
+function startPolling() {
+  if (poller) clearInterval(poller);
+  poller = setInterval(refreshAll, 900);
+  refreshAll();
+}
+
+async function refreshAll() {
+  await refreshLog();
+  await refreshEscalations();
+  await refreshDataset();
+  await refreshAudit();
+}
+
+async function refreshLog() {
+  const data = await api(`/api/log?since=${logCursor}`);
+  const logDiv = document.getElementById("log");
+  for (const ev of data.events) {
+    const div = document.createElement("div");
+    div.className = "logline lvl-" + ev.level;
+    div.textContent = `[${ev.ts.split("T")[1].replace("Z","")}] ${ev.message}`;
+    logDiv.appendChild(div);
+  }
+  logCursor = data.total;
+  logDiv.scrollTop = logDiv.scrollHeight;
+  document.getElementById("stageBadge").textContent = data.stage;
+}
+
+async function refreshEscalations() {
+  const data = await api("/api/escalations?status=pending");
+  document.getElementById("escCount").textContent = `${data.count} pending`;
+  const container = document.getElementById("escList");
+  if (data.count === 0) {
+    container.innerHTML = '<div class="empty">No pending escalations. 🎉</div>';
+    return;
+  }
+  container.innerHTML = "";
+  for (const e of data.items) {
+    const card = document.createElement("div");
+    card.className = "esc-card";
+    const ctxStr = JSON.stringify(e.context, null, 0);
+    card.innerHTML = `
+      <div class="kind">${e.kind.replace("_"," ")}</div>
+      <div class="title">${e.title}</div>
+      <div class="detail">${e.detail}</div>
+      <div class="ctx">${ctxStr}</div>
+      <div class="esc-actions">
+        ${e.options.map(o => `<button class="btn small secondary" onclick="resolveEsc('${e.id}','approve')">Use: ${o}</button>`).slice(0,1).join("")}
+        <input placeholder="custom value / correction" id="input-${e.id}" />
+        <button class="btn small good" onclick="resolveCorrect('${e.id}')">Correct</button>
+        <button class="btn small bad" onclick="resolveEsc('${e.id}','reject')">Reject record</button>
+      </div>
+    `;
+    container.appendChild(card);
+  }
+}
+
+async function resolveEsc(id, action) {
+  await api(`/api/escalations/${id}/resolve`, {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({action})
+  });
+  refreshAll();
+}
+
+async function resolveCorrect(id) {
+  const val = document.getElementById(`input-${id}`).value;
+  await api(`/api/escalations/${id}/resolve`, {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({action:"correct", value: val})
+  });
+  refreshAll();
+}
+
+function renderTable(rows, cols) {
+  if (!rows.length) return '<div class="empty">None.</div>';
+  let html = "<table><thead><tr>" + cols.map(c=>`<th>${c}</th>`).join("") + "</tr></thead><tbody>";
+  for (const r of rows) {
+    html += "<tr>" + cols.map(c => `<td>${r[c] ?? ""}</td>`).join("") + "</tr>";
+  }
+  html += "</tbody></table>";
+  return html;
+}
+
+async function refreshDataset() {
+  const data = await api("/api/dataset");
+  const s = data.summary;
+  document.getElementById("stats").innerHTML = `
+    <div class="stat"><div class="n">${s.total_candidates}</div><div class="l">Total records</div></div>
+    <div class="stat"><div class="n">${s.ready_to_push}</div><div class="l">Ready</div></div>
+    <div class="stat"><div class="n">${s.blocked_on_escalation}</div><div class="l">Blocked</div></div>
+    <div class="stat"><div class="n">${s.open_escalations}</div><div class="l">Open escalations</div></div>
+    <div class="stat"><div class="n">${s.rejected}</div><div class="l">Rejected</div></div>
+  `;
+  const cols = ["employee_id","first_name","last_name","email","department","job_title","hire_date","status"];
+  document.getElementById("dataset").innerHTML = renderTable(data.ready.concat(data.pending_escalation), cols);
+}
+
+async function refreshAudit() {
+  const data = await api("/api/audit");
+  const rows = data.items.slice().reverse().slice(0, 60).map(a => ({
+    ts: a.ts.split("T")[1].replace("Z",""), record_id: a.record_id, action: a.action, detail: a.detail
+  }));
+  document.getElementById("audit").innerHTML = renderTable(rows, ["ts","record_id","action","detail"]);
+}
+
+async function doPush() {
+  const res = await api("/api/push", {method:"POST"});
+  renderPush(res.results);
+}
+async function doRetry() {
+  const res = await api("/api/push/retry", {method:"POST"});
+  refreshAll();
+}
+async function doRollback() {
+  const res = await api("/api/push/rollback", {method:"POST"});
+  refreshAll();
+}
+function renderPush(results) {
+  const cols = ["employee_id","ok","attempts","error"];
+  document.getElementById("pushResults").innerHTML = renderTable(results, cols);
+}
+</script>
+</body>
+</html>
