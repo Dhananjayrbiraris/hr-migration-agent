@@ -40,6 +40,14 @@
   .esc-card .title { font-weight:600; font-size:13px; margin:3px 0 5px; }
   .esc-card .detail { font-size:12px; color: var(--muted); margin-bottom:8px; line-height:1.4; }
   .esc-card .ctx { font-size:11px; color:#b7bfce; background:#12151b; border-radius:6px; padding:6px 8px; margin-bottom:8px; white-space:pre-wrap; }
+  .ai-box { background: rgba(91,140,255,.08); border:1px solid rgba(91,140,255,.35); border-radius:7px; padding:7px 9px; margin-bottom:8px; }
+  .ai-label { font-size:10px; text-transform:uppercase; letter-spacing:.03em; color: var(--accent); display:flex; gap:6px; align-items:center; }
+  .conf { font-size:9px; padding:1px 6px; border-radius:8px; text-transform:none; }
+  .conf-high { background: rgba(51,193,123,.18); color: var(--good); }
+  .conf-medium { background: rgba(224,166,58,.18); color: var(--warn); }
+  .conf-low { background: rgba(224,85,85,.18); color: var(--bad); }
+  .ai-val { font-weight:600; font-size:13px; margin: 4px 0 2px; }
+  .ai-rationale { font-size:11px; color: var(--muted); margin-bottom:6px; }
   .esc-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
   .esc-actions input { background:#12151b; border:1px solid var(--border); color:var(--text); border-radius:5px; padding:5px 7px; font-size:12px; flex:1; min-width:120px; }
   table { width:100%; border-collapse:collapse; font-size:12px; }
@@ -62,7 +70,7 @@
 <header>
   <div>
     <h1>🧭 Client Data Migration &amp; Integration Agent</h1>
-    <div class="sub">HR/CRM → target platform · human-in-the-loop console</div>
+    <div class="sub">HR/CRM → target platform · human-in-the-loop console <span class="badge" id="llmBadge" style="margin-left:6px;">checking AI assist…</span></div>
   </div>
   <div class="toolbar">
     <button class="btn secondary" onclick="doReset()">Reset</button>
@@ -174,11 +182,24 @@ async function refreshEscalations() {
     const card = document.createElement("div");
     card.className = "esc-card";
     const ctxStr = JSON.stringify(e.context, null, 0);
+    let aiHtml = "";
+    if (e.ai_suggestion && !e.ai_suggestion.error) {
+      const s = e.ai_suggestion;
+      const sugStr = typeof s.suggestion === "object" ? JSON.stringify(s.suggestion) : s.suggestion;
+      aiHtml = `
+        <div class="ai-box">
+          <div class="ai-label">🤖 GPT-4o-mini suggests <span class="conf conf-${s.confidence}">${s.confidence}</span></div>
+          <div class="ai-val">${sugStr}</div>
+          <div class="ai-rationale">${s.rationale || ""}</div>
+          <button class="btn small" onclick='useAiSuggestion("${e.id}", ${JSON.stringify(sugStr).replace(/"/g,'&quot;')})'>Use this suggestion</button>
+        </div>`;
+    }
     card.innerHTML = `
       <div class="kind">${e.kind.replace("_"," ")}</div>
       <div class="title">${e.title}</div>
       <div class="detail">${e.detail}</div>
       <div class="ctx">${ctxStr}</div>
+      ${aiHtml}
       <div class="esc-actions">
         ${e.options.map(o => `<button class="btn small secondary" onclick="resolveEsc('${e.id}','approve')">Use: ${o}</button>`).slice(0,1).join("")}
         <input placeholder="custom value / correction" id="input-${e.id}" />
@@ -188,6 +209,16 @@ async function refreshEscalations() {
     `;
     container.appendChild(card);
   }
+}
+
+async function useAiSuggestion(id, sugStr) {
+  let value = sugStr;
+  try { value = JSON.parse(sugStr); } catch (e) { /* plain string suggestion, keep as-is */ }
+  await api(`/api/escalations/${id}/resolve`, {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({action:"correct", value})
+  });
+  refreshAll();
 }
 
 async function resolveEsc(id, action) {
@@ -255,6 +286,20 @@ function renderPush(results) {
   const cols = ["employee_id","ok","attempts","error"];
   document.getElementById("pushResults").innerHTML = renderTable(results, cols);
 }
+
+async function checkLlmStatus() {
+  try {
+    const s = await api("/api/llm-status");
+    const badge = document.getElementById("llmBadge");
+    if (s.enabled) {
+      badge.textContent = `🤖 AI assist on (${s.model})`;
+      badge.classList.add("badge", "esc");
+    } else {
+      badge.textContent = "AI assist off (set OPENAI_API_KEY)";
+    }
+  } catch (e) { /* ignore */ }
+}
+checkLlmStatus();
 </script>
 </body>
 </html>

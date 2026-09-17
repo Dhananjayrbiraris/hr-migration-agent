@@ -183,6 +183,12 @@ def get_mapping():
     return {"mapping": STATE.column_mapping}
 
 
+@app.get("/api/llm-status")
+def llm_status():
+    import llm
+    return {"enabled": llm.enabled(), "model": llm.MODEL}
+
+
 # Serve the frontend
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 

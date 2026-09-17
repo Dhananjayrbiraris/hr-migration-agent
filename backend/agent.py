@@ -37,6 +37,11 @@ from rapidfuzz import fuzz
 
 from schema import TARGET_SCHEMA, FIELD_NAMES, REQUIRED_FIELDS, FIELD_TYPES, VIRTUAL_FULL_NAME_ALIASES
 
+try:
+    import llm
+except Exception:
+    llm = None
+
 # ---------------------------------------------------------------------------
 # Confidence thresholds -- the actual "autonomy boundary" of the agent.
 # Tuned here in one place so the boundary is explicit and defensible.
@@ -61,6 +66,7 @@ class Escalation:
     options: list[str]
     status: str = "pending"  # pending | approved | corrected | rejected
     resolution: dict[str, Any] | None = None
+    ai_suggestion: dict[str, Any] | None = None
 
 
 @dataclass
@@ -95,7 +101,17 @@ class AgentState:
 
     def raise_escalation(self, kind: str, title: str, detail: str, context: dict, options: list[str]) -> str:
         eid = new_id("esc")
-        self.escalations[eid] = Escalation(eid, kind, title, detail, context, options)
+        esc = Escalation(eid, kind, title, detail, context, options)
+        if llm is not None and llm.enabled():
+            suggestion = llm.suggest_escalation_resolution(kind, title, detail, context, options)
+            if suggestion and "error" not in suggestion:
+                esc.ai_suggestion = suggestion
+                self.log("info", f"AI suggestion for '{title}': {suggestion['suggestion']} "
+                                  f"({suggestion['confidence']} confidence).", escalation_id=eid)
+            elif suggestion:
+                self.log("warn", f"AI suggestion unavailable for '{title}': {suggestion.get('error')}",
+                          escalation_id=eid)
+        self.escalations[eid] = esc
         self.log("escalate", f"Escalated: {title}", escalation_id=eid, kind=kind)
         return eid
 
