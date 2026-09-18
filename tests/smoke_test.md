@@ -5,6 +5,12 @@ including resolving every escalation type and push/retry/rollback — purely
 via the HTTP API. Useful as a regression check or as a basis for the demo
 recording's narration.
 
+By default this runs with AI-assisted suggestions **off** (no
+`OPENAI_API_KEY`); the resolution logic below doesn't depend on them either
+way — it resolves the rule-based options directly. If you do have
+`OPENAI_API_KEY` set, `GET /api/escalations?status=pending` will also
+include a populated `ai_suggestion` field per item you can inspect.
+
 ```bash
 python3 - <<'PY'
 import httpx

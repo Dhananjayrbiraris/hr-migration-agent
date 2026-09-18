@@ -9,13 +9,21 @@ consultant to supervise the run.
 ## Tech stack
 
 - **Backend**: Python, FastAPI, pandas, `python-dateutil`, `rapidfuzz` (fuzzy
-  string matching for column-name mapping). No LLM call in the hot path —
-  the mapping/cleaning/escalation logic is deterministic and explainable,
-  which matters for a customer-facing migration tool (see write-up). An LLM
-  (e.g. via the Claude/OpenAI API) is a natural next step for phrasing
-  escalation summaries or handling free-text fields; it wasn't required to
-  meet the acceptance criteria for this exercise so it isn't wired in, to
-  keep the decision logic auditable and testable.
+  string matching for column-name mapping). The core pipeline —
+  mapping/cleaning/reconciliation/validation/escalation — is deterministic
+  and rule-based, not an LLM call, which matters for a customer-facing
+  migration tool: it's inspectable, unit-testable, and its behavior doesn't
+  drift between runs (see write-up for why this is the autonomy boundary).
+- **Optional LLM assist**: `openai` Python SDK calling **gpt-4o-mini**.
+  When `OPENAI_API_KEY` is set, every escalation additionally gets an
+  advisory suggestion + one-line rationale + confidence, shown right on the
+  card with a "Use this suggestion" button. It's purely advisory — never
+  auto-applied, the human still clicks approve/correct/reject — and if the
+  key is unset or the call fails/times out, the app runs exactly as it does
+  without any LLM in the loop (see `backend/llm.py`).
+- **Environment & dependencies**: managed with [`uv`](https://docs.astral.sh/uv/)
+  — `pyproject.toml` + `uv.lock` at the repo root, `uv sync` to create the
+  venv, `uv run` to execute. No manual `pip`/`venv` steps needed.
 - **Frontend**: a single static HTML file, vanilla JS, no build step. Polls
   the backend every ~900ms for a live trace, escalation queue, dataset
   preview, push results and audit trail.
@@ -26,35 +34,56 @@ consultant to supervise the run.
 ## Project layout
 
 ```
+pyproject.toml   uv-managed dependencies
+uv.lock          locked, reproducible dependency versions
+.env.example     copy to .env and set OPENAI_API_KEY to enable AI assist
 backend/
   main.py       FastAPI app / HTTP endpoints
   agent.py      the actual agent: ingest -> map -> reshape -> clean ->
                 reconcile -> validate, plus escalation resolution
   schema.py     target schema for the 'employees' entity
   mock_api.py   stub target-system API
+  llm.py        optional gpt-4o-mini escalation-suggestion helper
 data/
   hris_export.csv   sample legacy HRIS export
   crm_export.csv    sample CRM export (different columns, overlapping people)
 frontend/
   index.html    the consultant-facing console (single page, no build step)
-run.sh          convenience launcher
+run.sh          uv-based convenience launcher
 ```
 
 ## Running it locally
 
-Requires Python 3.10+.
+Requires Python 3.10+. [`uv`](https://docs.astral.sh/uv/) is used for
+environment/dependency management — `run.sh` will install it via `pip` if
+it's not already on your machine, or install it yourself first:
+`curl -LsSf https://astral.sh/uv/install.sh | sh`.
 
 ```bash
 git clone <this repo>
 cd hr_migration_agent
+cp .env.example .env     # optional: add OPENAI_API_KEY to enable AI-assisted suggestions
 ./run.sh
 ```
 
-Then open **http://localhost:8000**.
+`run.sh` runs `uv sync` (creates `.venv/` from `pyproject.toml` + `uv.lock`,
+fast and reproducible) and then `uv run uvicorn main:app`. Open
+**http://localhost:8000**.
 
-(If you'd rather do it by hand: `cd backend && pip install -r
-requirements.txt && uvicorn main:app --reload`, then open the same URL —
-`main.py` serves the frontend directly, no separate frontend server needed.)
+Equivalent by hand:
+```bash
+uv sync
+cd backend && uv run --project .. uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Enabling AI-assisted suggestions (optional)
+
+Without `OPENAI_API_KEY` set, the app is fully functional — every escalation
+still has a rule-based set of options a human picks from. With it set (in
+`.env`, or exported in your shell), each escalation additionally gets a
+gpt-4o-mini-generated suggestion + rationale + confidence level, visible as
+an "🤖 AI suggests ..." box with a one-click "Use this suggestion" button.
+The header shows "AI assist on/off" so it's obvious which mode you're in.
 
 ## Using the console
 
@@ -63,10 +92,12 @@ requirements.txt && uvicorn main:app --reload`, then open the same URL —
    live trace panel; it logs every mapping decision, cleanup, merge, and
    escalation as it happens.
 2. **Escalation queue** — each card shows exactly what's ambiguous and why,
-   with the raw context (source file, row, candidate values). For each you
-   can:
-   - click the suggested option button (**approve** the agent's top guess /
-     first candidate),
+   with the raw context (source file, row, candidate values), and — if
+   `OPENAI_API_KEY` is set — an AI-suggested resolution with a rationale and
+   confidence level. For each you can:
+   - click the suggested option button (**approve** the agent's top
+     rule-based guess / first candidate),
+   - click **Use this suggestion** to accept the AI's proposed value,
    - type a correction and hit **Correct**,
    - or **Reject** to drop that record from the migration (it's not
      force-fit into the target).

@@ -16,11 +16,20 @@ dataset view updates immediately. Everything not escalated is applied
 automatically and written to an audit trail with before/after values, so
 "autonomous" never means "invisible."
 
-I used a deterministic, rule-and-fuzzy-match engine rather than routing every
-field through an LLM call. For a customer-facing migration tool, I'd rather
-the mapping/cleaning logic be inspectable and unit-testable than probabilistic
-end-to-end — an LLM's value here is in the corners the rules don't cover
-(see "what's next"), not in replacing the core decision logic.
+I used a deterministic, rule-and-fuzzy-match engine for the core pipeline
+rather than routing every field through an LLM call. For a customer-facing
+migration tool, I'd rather the mapping/cleaning logic be inspectable and
+unit-testable than probabilistic end-to-end. The one place an LLM (gpt-4o-mini)
+*is* wired in is deliberately narrow and additive: when an escalation is
+raised, the agent optionally asks gpt-4o-mini for a suggested resolution and
+a one-line rationale, shown on the card with a confidence level and a
+"use this suggestion" button. It never resolves anything by itself — it's
+strictly advisory, degrades silently to "no suggestion" if no API key is
+set or the call fails, and the human still has to click approve/correct/
+reject either way. That split — deterministic core, LLM only to speed up
+the human's decision at the edges — is the same boundary described below,
+just applied one level up: the LLM doesn't get more autonomy than the rule
+engine does.
 
 ## Where I drew the autonomy line, and why
 
@@ -71,12 +80,18 @@ isn't triaging noise.
 
 - **Learn from corrections.** Every human resolution is already captured
   with before/after values; the natural next step is feeding that history
-  back into the mapping/cleaning confidence scores so the same client's
-  future files need fewer escalations over time.
-- **LLM-assisted escalation summaries and free-text fields** — an LLM call
-  scoped narrowly to phrasing the "why" of an escalation in plain language,
-  or handling genuinely unstructured fields (e.g. free-text notes columns),
-  without putting it in the critical path for structured field mapping.
+  back into the mapping/cleaning confidence scores (and into the LLM
+  prompt as few-shot examples) so the same client's future files need
+  fewer escalations over time.
+- **Async/streamed LLM calls.** Suggestions are currently fetched
+  synchronously when an escalation is raised, which adds latency to
+  `/api/run` when AI assist is enabled. Fetching them lazily per-card (or
+  in parallel) would keep the pipeline itself instant regardless of LLM
+  latency.
+- **LLM for genuinely unstructured fields** — free-text notes columns,
+  inconsistent department names that need semantic (not just fuzzy-string)
+  matching to the target taxonomy — scoped the same way as the escalation
+  suggestions: proposal, not autonomous action.
 - **Field-level rollback**, not just batch rollback — today rollback undoes
   an entire push; a targeted "revert this one record" would be safer once
   volumes grow.
