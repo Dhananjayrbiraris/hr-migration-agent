@@ -163,15 +163,16 @@ def split_full_name(name: str) -> Tuple[Optional[str], Optional[str], bool]:
     return None, None, False
 
 
-def ingest(state: AgentState, files: Dict[str, str]):
+def ingest(state: AgentState, files: Dict[str, Any]):
     state.stage = "ingest"
     state.log("info", f"Starting ingestion of {len(files)} source file(s).")
-    for name, path in files.items():
-        df = pd.read_csv(path, dtype=str, keep_default_na=False)
+    for name, path_or_buf in files.items():
+        df = pd.read_csv(path_or_buf, dtype=str, keep_default_na=False)
         df = df.rename(columns=lambda c: c.strip())
         state.raw_frames[name] = df
         state.log("action", f"Loaded '{name}': {len(df)} rows, {len(df.columns)} columns.",
                    file=name, rows=len(df), columns=list(df.columns))
+
 
 
 def map_columns(state: AgentState):

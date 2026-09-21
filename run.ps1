@@ -1,13 +1,16 @@
-# PowerShell runner script for Windows
-Set-StrictMode -Version Latest
+# Run script for Windows (PowerShell)
 $ErrorActionPreference = "Stop"
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-Set-Location $scriptDir
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Error "uv not found. Install from https://docs.astral.sh/uv/getting-started/installation/"
+    exit 1
+}
 
-Write-Host "Syncing environment with uv..."
 uv sync
 
-Write-Host "Starting server on http://localhost:8000 ..."
-Set-Location "$scriptDir\backend"
-uv run --project .. uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+Write-Host ""
+Write-Host "Starting HR Migration Agent (Streamlit)..."
+Write-Host "Open http://localhost:8501 in your browser."
+Write-Host ""
+
+uv run streamlit run app.py

@@ -1,68 +1,79 @@
-# Client Data Migration Agent
+# HR Data Migration Agent
 
-An automated data ingestion and migration system built with FastAPI and Pandas. Ingests multi-source HR and CRM exports, maps schema fields, normalizes data, handles record deduplication, and pushes validated records to target APIs with human-in-the-loop escalation handling.
+A human-in-the-loop data migration pipeline that reads raw HR/CRM exports, maps columns to a target schema, cleans and validates records, surfaces conflicts as escalations for human review, and pushes approved records to a target system backed by Supabase PostgreSQL.
 
-## System Architecture
+Built with Python + Streamlit. Deployable on [Streamlit Community Cloud](https://streamlit.io/cloud).
 
-- **Database**: **Supabase PostgreSQL Cloud Database** connected via standard PostgreSQL connection string (`DATABASE_URL`) using **SQLAlchemy** and **psycopg2**.
-- **Backend**: Python 3.10+, FastAPI, Pandas, RapidFuzz, DateUtil, SQLAlchemy, Psycopg2.
-- **LLM Integration**: Optional Groq (`llama-3.3-70b-versatile`) or OpenAI (`gpt-4o-mini`) integration for escalation resolution suggestions.
-- **Frontend**: Lightweight single-page web console for file uploads, real-time event tracing, escalation reviews, and audit trail inspection.
+---
 
-## Project Structure
+## Features
 
-```text
-backend/
-  main.py       FastAPI application and REST endpoints
-  agent.py      Data processing pipeline and escalation engine
-  schema.py     Target employee schema definition
-  mock_api.py   Target API integration simulator
-  llm.py        AI advisory service (Groq / OpenAI)
-frontend/
-  index.html    Console UI
-my_upload_files/
-  hr_employees.csv   Sample CSV file for testing
-  crm_contacts.csv   Sample CSV file for testing
-pyproject.toml   Dependencies configuration
-run.ps1          PowerShell runner script for Windows
-run.sh           Shell runner script
+- Ingests multiple CSV exports with inconsistent column names and mixed date formats
+- Fuzzy column mapping with automatic confidence scoring
+- Field-level cleaning: whitespace normalisation, date parsing, email validation
+- Duplicate detection and cross-source record reconciliation
+- Escalation queue with per-record review UI (approve / correct / reject)
+- Optional AI-assisted suggestions via Groq or OpenAI
+- Push to target with retry logic and batch rollback
+- Full audit trail persisted to Supabase PostgreSQL
+
+---
+
+## Setup
+
+**Requirements:** Python 3.10+, [uv](https://docs.astral.sh/uv/)
+
+```bash
+git clone https://github.com/<you>/hr-migration-agent
+cd hr-migration-agent
+cp .env.example .env          # fill in your values
+uv sync
+uv run streamlit run app.py
 ```
 
-## Setup & Running
+Open [http://localhost:8501](http://localhost:8501).
 
-### Requirements
-- Python 3.10+
-- `uv` package manager (recommended) or standard `pip`
-
-### Execution Commands
-
-#### Using PowerShell (Windows)
-```powershell
-.\run.ps1
-```
-
-#### Using Python / Uvicorn Directly
-```powershell
-python -m uvicorn backend.main:app --reload --port 8000
-```
-
-#### Using `uv`
-```powershell
-uv run --project backend uvicorn backend.main:app --reload --port 8000
-```
-
-The web console will be available at `http://localhost:8000`.
+---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` to configure AI resolution suggestions:
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | Supabase PostgreSQL connection string |
+| `GROQ_API_KEY` | No | Groq API key — enables AI escalation suggestions |
+| `GROQ_MODEL` | No | Groq model name (default: `llama-3.3-70b-versatile`) |
+| `OPENAI_API_KEY` | No | OpenAI fallback if Groq key not set |
 
-```env
-# Groq configuration
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=llama-3.3-70b-versatile
+---
 
-# OpenAI configuration
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4o-mini
+## Project Structure
+
 ```
+app.py               # Streamlit entry point
+backend/
+  agent.py           # ETL pipeline: ingest → map → clean → reconcile → validate
+  schema.py          # Target schema definition
+  mock_api.py        # Target system client (backed by Supabase)
+  database.py        # SQLAlchemy + psycopg2 persistence layer
+  llm.py             # Groq / OpenAI integration for AI suggestions
+data/
+  hris_export.csv    # Demo HRIS data with intentional quality issues
+  crm_export.csv     # Demo CRM data for reconciliation testing
+```
+
+---
+
+## Deployment (Streamlit Community Cloud)
+
+1. Push the repo to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io) → New app
+3. Select repo, set **Main file path**: `app.py`
+4. Add secrets in the dashboard:
+
+```toml
+DATABASE_URL = "postgresql://..."
+GROQ_API_KEY = "gsk_..."
+GROQ_MODEL = "llama-3.3-70b-versatile"
+```
+
+5. Click Deploy — live URL in ~2 minutes.
