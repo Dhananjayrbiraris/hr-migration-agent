@@ -190,8 +190,12 @@ def get_mapping():
 
 @app.get("/api/llm-status")
 def llm_status():
-    import llm
+    try:
+        from . import llm
+    except ImportError:
+        import llm
     return {"enabled": llm.enabled(), "model": llm.MODEL, "provider": getattr(llm, "PROVIDER", None)}
+
 
 
 # Serve the frontend
