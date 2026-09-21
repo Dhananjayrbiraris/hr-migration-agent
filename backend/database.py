@@ -10,20 +10,29 @@ from sqlalchemy import create_engine, text
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL") or os.getenv("SUPABASE_URL")
-
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-_engine = None
+def get_db_url() -> Optional[str]:
+    url = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL") or os.getenv("SUPABASE_URL")
+    if not url:
+        try:
+            import streamlit as st
+            url = st.secrets.get("DATABASE_URL") or st.secrets.get("SUPABASE_DB_URL") or st.secrets.get("SUPABASE_URL")
+        except Exception:
+            pass
+    if url and url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
 
 
 def get_engine():
     global _engine
-    if not DATABASE_URL:
+    url = get_db_url()
+    if not url:
         return None
     if _engine is None:
-        _engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
+        try:
+            _engine = create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
+        except Exception:
+            return None
     return _engine
 
 
@@ -31,34 +40,37 @@ def init_db():
     engine = get_engine()
     if engine is None:
         return
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS target_employees (
-                employee_id VARCHAR(255) PRIMARY KEY,
-                first_name VARCHAR(255),
-                last_name VARCHAR(255),
-                email VARCHAR(255),
-                department VARCHAR(255),
-                job_title VARCHAR(255),
-                hire_date VARCHAR(255),
-                status VARCHAR(255),
-                manager_email VARCHAR(255),
-                location VARCHAR(255),
-                pushed_at VARCHAR(255),
-                batch_id VARCHAR(255)
-            );
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id SERIAL PRIMARY KEY,
-                ts VARCHAR(255),
-                record_id VARCHAR(255),
-                action VARCHAR(255),
-                detail TEXT,
-                before_val TEXT,
-                after_val TEXT
-            );
-        """))
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS target_employees (
+                    employee_id VARCHAR(255) PRIMARY KEY,
+                    first_name VARCHAR(255),
+                    last_name VARCHAR(255),
+                    email VARCHAR(255),
+                    department VARCHAR(255),
+                    job_title VARCHAR(255),
+                    hire_date VARCHAR(255),
+                    status VARCHAR(255),
+                    manager_email VARCHAR(255),
+                    location VARCHAR(255),
+                    pushed_at VARCHAR(255),
+                    batch_id VARCHAR(255)
+                );
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id SERIAL PRIMARY KEY,
+                    ts VARCHAR(255),
+                    record_id VARCHAR(255),
+                    action VARCHAR(255),
+                    detail TEXT,
+                    before_val TEXT,
+                    after_val TEXT
+                );
+            """))
+    except Exception:
+        pass
 
 
 def reset_db():
@@ -66,9 +78,12 @@ def reset_db():
     if engine is None:
         return
     init_db()
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE target_employees;"))
-        conn.execute(text("TRUNCATE TABLE audit_logs;"))
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE target_employees;"))
+            conn.execute(text("TRUNCATE TABLE audit_logs;"))
+    except Exception:
+        pass
 
 
 def save_target_employee(record: Dict[str, Any], batch_id: str) -> bool:

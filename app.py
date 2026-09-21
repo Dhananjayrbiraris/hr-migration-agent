@@ -21,9 +21,14 @@ load_dotenv()
 # On Streamlit Cloud, secrets live in st.secrets — bridge them into os.environ
 # so that database.py, llm.py etc. can still use os.getenv() unchanged.
 try:
-    for _k, _v in st.secrets.items():
-        if isinstance(_v, str) and _k not in os.environ:
-            os.environ[_k] = _v
+    if hasattr(st, "secrets"):
+        for _k, _v in st.secrets.items():
+            if isinstance(_v, str) and _k not in os.environ:
+                os.environ[_k] = _v
+            elif hasattr(_v, "items"):
+                for _sub_k, _sub_v in _v.items():
+                    if isinstance(_sub_v, str) and _sub_k not in os.environ:
+                        os.environ[_sub_k] = _sub_v
 except Exception:
     pass
 
@@ -132,7 +137,7 @@ if run_clicked:
     files: dict = {}
     if uploaded_files and not use_demo:
         for f in uploaded_files:
-            files[f.name] = io.BytesIO(f.read())
+            files[f.name] = io.BytesIO(f.getvalue())
     else:
         data_dir = os.path.join(os.path.dirname(__file__), "data")
         if os.path.isdir(data_dir):
@@ -371,7 +376,10 @@ with tab_target:
         st.dataframe(push_res, use_container_width=True)
 
     st.subheader("Records in target system")
-    live_records = mock_api.list_records()
+    try:
+        live_records = mock_api.list_records()
+    except Exception as e:
+        live_records = []
     if live_records:
         st.dataframe(live_records, use_container_width=True)
     else:
@@ -380,7 +388,12 @@ with tab_target:
 
 # ── Tab 5: Audit Log ──────────────────────────────────────────────────────────
 with tab_audit:
-    if s.audit:
-        st.dataframe(s.audit, use_container_width=True)
+    try:
+        db_audit = database.get_audit_logs()
+    except Exception:
+        db_audit = []
+    display_audit = s.audit if s.audit else db_audit
+    if display_audit:
+        st.dataframe(display_audit, use_container_width=True)
     else:
         st.info("Audit entries appear here after the pipeline runs and records are resolved/pushed.")

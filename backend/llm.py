@@ -12,31 +12,44 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+def _resolve_config():
+    global GROQ_API_KEY, OPENAI_API_KEY, PROVIDER, MODEL, _ENABLED
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    if not GROQ_API_KEY and not OPENAI_API_KEY:
+        try:
+            import streamlit as st
+            GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+            OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY")
+        except Exception:
+            pass
 
-if GROQ_API_KEY:
-    PROVIDER = "Groq"
-    MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-    _ENABLED = True
-elif OPENAI_API_KEY:
-    PROVIDER = "OpenAI"
-    MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    _ENABLED = True
-else:
-    PROVIDER = None
-    MODEL = os.getenv("GROQ_MODEL", os.getenv("OPENAI_MODEL", "llama-3.3-70b-versatile"))
-    _ENABLED = False
+    if GROQ_API_KEY:
+        PROVIDER = "Groq"
+        MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        _ENABLED = True
+    elif OPENAI_API_KEY:
+        PROVIDER = "OpenAI"
+        MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        _ENABLED = True
+    else:
+        PROVIDER = None
+        MODEL = os.getenv("GROQ_MODEL", os.getenv("OPENAI_MODEL", "llama-3.3-70b-versatile"))
+        _ENABLED = False
 
+
+_resolve_config()
 _client = None
 
 
 def enabled() -> bool:
+    _resolve_config()
     return _ENABLED
 
 
 def _get_client():
     global _client
+    _resolve_config()
     if not _ENABLED:
         return None
     if _client is None:
