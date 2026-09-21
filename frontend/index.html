@@ -69,12 +69,13 @@
 <body>
 <header>
   <div>
-    <h1>🧭 Client Data Migration &amp; Integration Agent</h1>
-    <div class="sub">HR/CRM → target platform · human-in-the-loop console <span class="badge" id="llmBadge" style="margin-left:6px;">checking AI assist…</span></div>
+    <h1>Client Data Migration Agent</h1>
   </div>
   <div class="toolbar">
+    <input type="file" id="fileInput" multiple accept=".csv" style="display:none;" onchange="handleFileUpload(event)" />
+    <button class="btn secondary" onclick="document.getElementById('fileInput').click()">Upload CSV Files</button>
     <button class="btn secondary" onclick="doReset()">Reset</button>
-    <button class="btn" onclick="doRun()">▶ Run agent on sample data</button>
+    <button class="btn" onclick="doRun()">Run Agent</button>
   </div>
 </header>
 
@@ -87,7 +88,7 @@
 
     <div class="panel">
       <h2>Escalation queue <span class="badge esc" id="escCount">0 pending</span></h2>
-      <div id="escList"><div class="empty">No escalations yet. Run the agent to begin.</div></div>
+      <div id="escList"><div class="empty">No escalations yet. Upload files and run the agent.</div></div>
     </div>
   </div>
 
@@ -96,9 +97,9 @@
       <h2>Migration summary</h2>
       <div class="stat-row" id="stats"></div>
       <div class="toolbar">
-        <button class="btn good" onclick="doPush()">⤴ Push ready records to target</button>
-        <button class="btn warn" onclick="doRetry()">⟲ Retry failed</button>
-        <button class="btn bad secondary" onclick="doRollback()">⎌ Rollback last batch</button>
+        <button class="btn good" onclick="doPush()">Push ready records to target</button>
+        <button class="btn warn" onclick="doRetry()">Retry failed</button>
+        <button class="btn bad secondary" onclick="doRollback()">Rollback last batch</button>
       </div>
       <div class="tablewrap" id="pushResults"><div class="empty">No push yet.</div></div>
     </div>
@@ -137,8 +138,26 @@ async function doReset() {
   document.getElementById("stageBadge").textContent = "idle";
 }
 
+async function handleFileUpload(event) {
+  const files = event.target.files;
+  if (!files.length) return;
+  const formData = new FormData();
+  for (let file of files) {
+    formData.append("files", file);
+  }
+  const res = await fetch("/api/upload", { method: "POST", body: formData });
+  const data = await res.json();
+  if (data.ok) {
+    await doRun();
+  }
+}
+
 async function doRun() {
-  await api("/api/run?use_sample=true", {method:"POST"});
+  const data = await api("/api/run", {method:"POST"});
+  if (!data.ok && data.error) {
+    alert(data.error);
+    return;
+  }
   startPolling();
 }
 
@@ -174,7 +193,7 @@ async function refreshEscalations() {
   document.getElementById("escCount").textContent = `${data.count} pending`;
   const container = document.getElementById("escList");
   if (data.count === 0) {
-    container.innerHTML = '<div class="empty">No pending escalations. 🎉</div>';
+    container.innerHTML = '<div class="empty">No pending escalations.</div>';
     return;
   }
   container.innerHTML = "";
@@ -188,7 +207,7 @@ async function refreshEscalations() {
       const sugStr = typeof s.suggestion === "object" ? JSON.stringify(s.suggestion) : s.suggestion;
       aiHtml = `
         <div class="ai-box">
-          <div class="ai-label">🤖 GPT-4o-mini suggests <span class="conf conf-${s.confidence}">${s.confidence}</span></div>
+          <div class="ai-label">AI Suggestion (${s.model || 'AI'}) <span class="conf conf-${s.confidence}">${s.confidence}</span></div>
           <div class="ai-val">${sugStr}</div>
           <div class="ai-rationale">${s.rationale || ""}</div>
           <button class="btn small" onclick='useAiSuggestion("${e.id}", ${JSON.stringify(sugStr).replace(/"/g,'&quot;')})'>Use this suggestion</button>
@@ -291,11 +310,13 @@ async function checkLlmStatus() {
   try {
     const s = await api("/api/llm-status");
     const badge = document.getElementById("llmBadge");
-    if (s.enabled) {
-      badge.textContent = `🤖 AI assist on (${s.model})`;
-      badge.classList.add("badge", "esc");
-    } else {
-      badge.textContent = "AI assist off (set OPENAI_API_KEY)";
+    if (badge) {
+      if (s.enabled) {
+        badge.textContent = `🤖 AI assist on (${s.provider || 'AI'}: ${s.model})`;
+        badge.classList.add("badge", "esc");
+      } else {
+        badge.textContent = "AI assist off";
+      }
     }
   } catch (e) { /* ignore */ }
 }

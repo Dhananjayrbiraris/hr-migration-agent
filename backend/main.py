@@ -10,8 +10,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-import agent
-import mock_api
+try:
+    from . import agent, mock_api
+except ImportError:
+    import agent
+    import mock_api
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -52,18 +55,20 @@ async def upload(files: list[UploadFile] = File(...)):
 
 
 @app.post("/api/run")
-def run(use_sample: bool = True):
-    """Kick off the pipeline. use_sample=True runs against the bundled demo
-    files in /data; otherwise it runs against whatever was /api/upload-ed."""
+def run(use_sample: bool = False):
     global STATE
     STATE = agent.AgentState()
-    if use_sample:
-        files = {
-            "hris_export.csv": os.path.join(DATA_DIR, "hris_export.csv"),
-            "crm_export.csv": os.path.join(DATA_DIR, "crm_export.csv"),
-        }
+    uploaded = [f for f in os.listdir(UPLOAD_DIR) if f.endswith(".csv")]
+    if use_sample or not uploaded:
+        if os.path.exists(DATA_DIR):
+            files = {name: os.path.join(DATA_DIR, name) for name in os.listdir(DATA_DIR) if name.endswith(".csv")}
+        else:
+            files = {}
     else:
-        files = {name: os.path.join(UPLOAD_DIR, name) for name in os.listdir(UPLOAD_DIR)}
+        files = {name: os.path.join(UPLOAD_DIR, name) for name in uploaded}
+
+    if not files:
+        return {"ok": False, "error": "No CSV files found to process. Please upload CSV files."}
     agent.run_pipeline(STATE, files)
     return {"ok": True, "stage": STATE.stage, "escalation_count": len(STATE.escalations)}
 
@@ -186,7 +191,7 @@ def get_mapping():
 @app.get("/api/llm-status")
 def llm_status():
     import llm
-    return {"enabled": llm.enabled(), "model": llm.MODEL}
+    return {"enabled": llm.enabled(), "model": llm.MODEL, "provider": getattr(llm, "PROVIDER", None)}
 
 
 # Serve the frontend

@@ -1,30 +1,33 @@
 """
-Optional LLM assistance for the escalation queue.
-
-Design intent: the core pipeline (ingest/map/clean/reconcile/validate) stays
-fully deterministic and rule-based -- that's what makes the autonomy
-boundary in agent.py explainable and testable. The LLM is used ONLY at the
-edges, to help a human resolve an escalation faster: given the exact same
-context a human reviewer sees, gpt-4o-mini proposes a value and a one-line
-rationale. It is never auto-applied -- it shows up in the escalation card as
-a suggestion with a confidence level, and the human still clicks
-approve/correct/reject. If no API key is configured, or the call fails or
-times out, this degrades silently to "no suggestion" and the rest of the
-app behaves exactly as it does without an LLM in the loop.
+LLM integration module for AI-assisted escalation resolution suggestions.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-_ENABLED = bool(os.getenv("OPENAI_API_KEY"))
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+if GROQ_API_KEY:
+    PROVIDER = "Groq"
+    MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    _ENABLED = True
+elif OPENAI_API_KEY:
+    PROVIDER = "OpenAI"
+    MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    _ENABLED = True
+else:
+    PROVIDER = None
+    MODEL = os.getenv("GROQ_MODEL", os.getenv("OPENAI_MODEL", "llama-3.3-70b-versatile"))
+    _ENABLED = False
+
 _client = None
 
 
@@ -38,7 +41,13 @@ def _get_client():
         return None
     if _client is None:
         from openai import OpenAI
-        _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        if GROQ_API_KEY:
+            _client = OpenAI(
+                api_key=GROQ_API_KEY,
+                base_url="https://api.groq.com/openai/v1"
+            )
+        elif OPENAI_API_KEY:
+            _client = OpenAI(api_key=OPENAI_API_KEY)
     return _client
 
 
@@ -47,32 +56,24 @@ def _build_prompt(kind: str, title: str, detail: str, context: dict[str, Any], o
     shape_instruction = (
         '"suggestion" must be an object: {"first_name": "...", "last_name": "..."}'
         if is_name_split else
-        '"suggestion" must be a single string -- ideally one of the listed options, '
-        "or a corrected value if none of the options are appropriate"
+        '"suggestion" must be a single string from candidate options or a corrected value'
     )
-    return f"""A data migration agent hit a case it isn't confident enough to resolve on its own, \
-and is asking a human implementation consultant to decide. Propose the most likely correct \
-resolution to help the human resolve it in one glance. Be conservative: if you are genuinely \
-unsure, say so with low confidence rather than guessing.
+    return f"""Analyze the following data escalation case from an automated migration pipeline:
 
-Escalation type: {kind}
+Escalation Type: {kind}
 Title: {title}
-Why it was escalated: {detail}
+Reason: {detail}
 Context: {json.dumps(context, default=str)}
-Candidate options already identified: {options}
+Options: {options}
 
-Respond with ONLY a JSON object, no markdown fences, no commentary:
-{{"suggestion": <see shape below>, "rationale": "<one sentence, plain English>", "confidence": "low|medium|high"}}
+Recommend the most likely resolution.
+Respond with ONLY valid JSON with keys "suggestion", "rationale", and "confidence" ("low", "medium", "high").
 {shape_instruction}
 """
 
 
 def suggest_escalation_resolution(kind: str, title: str, detail: str,
-                                   context: dict[str, Any], options: list[str]) -> dict | None:
-    """Returns {"suggestion", "rationale", "confidence", "model"} or None if
-    the LLM is not configured. Never raises -- a failed call just yields a
-    dict with an "error" key so the UI can show 'AI suggestion unavailable'
-    instead of breaking the escalation card."""
+                                   context: dict[str, Any], options: list[str]) -> Optional[dict]:
     client = _get_client()
     if client is None:
         return None
@@ -80,7 +81,7 @@ def suggest_escalation_resolution(kind: str, title: str, detail: str,
         resp = client.chat.completions.create(
             model=MODEL,
             messages=[
-                {"role": "system", "content": "You output only valid JSON, nothing else."},
+                {"role": "system", "content": "You are a data migration assistant. Output valid JSON only."},
                 {"role": "user", "content": _build_prompt(kind, title, detail, context, options)},
             ],
             temperature=0,
